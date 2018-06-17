@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Forward SNS Messages to Slack
+Outputs:
+  SNSTopic:
+    Value:
+      Ref: Topic
+Resources:
+  Function:
+    Properties:
+      Code:
+        ZipFile: !Sub |
+          from __future__ import print_function
+          from botocore.vendored import requests
+          import json
+          import re
+
+          def lambda_handler(event, context):
+              #print(event)
+              sns_message = event['Records'][0]['Sns']['Message']
+              #print ('sns_message: ' + sns_message)
+
+              sns_subject = event['Records'][0]['Sns']['Subject']
+
+              if "AWS Elastic Beanstalk Notification" in sns_subject: 
+                # The eb_message is the string between \nMessage:    and \n\nEnvironment
+                eb_message = re.search('\nMessage: (.*)\n\nEnvironment', sns_message).group(1)
+                eb_environment = re.search('\n\nEnvironment: (.*)\nApplication', sns_message).group(1)
+                slack_message = {"text": "*EB Event:* " + eb_environment + ": " + eb_message}
+
+              elif "RDS Notification Message" in sns_subject: 
+                slack_message = {"text": "*RDS Event:* " + sns_message}
+                
+              else:
+                slack_message = {"text": "*Unknown Event:* " + sns_message}
+
+              webhook_url = 'https://hooks.slack.com/services/xyz'
+              requests.post(webhook_url, data=json.dumps(slack_message), headers={'Content-Type': 'application/json'})
+              
+              return
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt 'executionRole.Arn'
+      Runtime: python3.6
+    Type: AWS::Lambda::Function
+  LambdaInvokePermission:
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - Function
+        - Arn
+      Principal: sns.amazonaws.com
+      SourceArn:
+        Ref: Topic
+    Type: AWS::Lambda::Permission
+  Topic:
+    DependsOn:
+    - Function
+    Properties:
+      Subscription:
+      - Endpoint:
+          Fn::GetAtt:
+          - Function
+          - Arn
+        Protocol: lambda
+    Type: AWS::SNS::Topic
+  executionRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicexecutionRole
+      Path: /
+    Type: AWS::IAM::Role
