@@ -15,10 +15,10 @@ Resources:
           import re
 
           def lambda_handler(event, context):
-              # print('*****START EVENT*****')
-              # print(event)
-              # print('*****END EVENT*****')
-              # print('')
+              print('*****START EVENT*****')
+              print(event)
+              print('*****END EVENT*****')
+              print('')
               
               sns_subject = event['Records'][0]['Sns']['Subject']
               print ('*****SNS_SUBJECT:*****')
@@ -50,12 +50,17 @@ Resources:
                   
               def send_other_message():
                   print ('*****SENDING OTHER MESSAGE*****')
-                  slack_message = {"text": "*Other Event:* " + sns_message}
+                  # Convert sns_message to a string. In Other Events, sns_message *should* be a dict.
+                  slack_message = {"text": "*Other Event:* About to send an event which may not process correctly. Check the logs if it does not appear."}
+                  send_to_slack(slack_message)
+                  
+                  sns_message_string = json.dumps(sns_message)
+                  slack_message = {"text": "*Other Event:* " + sns_message_string}
                   send_to_slack(slack_message)
                   return
                   
               def send_to_slack(slack_message):
-                  webhook_url = 'https://hooks.slack.com/services/xyz/xyz/123456'
+                  webhook_url = 'https://hooks.slack.com/services/xyz/xyz/123'
                   print (slack_message)
                   requests.post(webhook_url, data=json.dumps(slack_message), headers={'Content-Type': 'application/json'})
                   
@@ -67,7 +72,6 @@ Resources:
                   send_other_message()
                   
               return
-
       Handler: index.lambda_handler
       MemorySize: 128
       Role: !GetAtt 'executionRole.Arn'
