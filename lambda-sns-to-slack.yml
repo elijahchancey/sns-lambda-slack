@@ -15,28 +15,59 @@ Resources:
           import re
 
           def lambda_handler(event, context):
-              #print(event)
-              sns_message = event['Records'][0]['Sns']['Message']
-              #print ('sns_message: ' + sns_message)
-
-              sns_subject = event['Records'][0]['Sns']['Subject']
-
-              if "AWS Elastic Beanstalk Notification" in sns_subject: 
-                # The eb_message is the string between \nMessage:    and \n\nEnvironment
-                eb_message = re.search('\nMessage: (.*)\n\nEnvironment', sns_message).group(1)
-                eb_environment = re.search('\n\nEnvironment: (.*)\nApplication', sns_message).group(1)
-                slack_message = {"text": "*EB Event:* " + eb_environment + ": " + eb_message}
-
-              elif "RDS Notification Message" in sns_subject: 
-                slack_message = {"text": "*RDS Event:* " + sns_message}
-                
-              else:
-                slack_message = {"text": "*Unknown Event:* " + sns_message}
-
-              webhook_url = 'https://hooks.slack.com/services/xyz'
-              requests.post(webhook_url, data=json.dumps(slack_message), headers={'Content-Type': 'application/json'})
+              # print('*****START EVENT*****')
+              # print(event)
+              # print('*****END EVENT*****')
+              # print('')
               
+              sns_subject = event['Records'][0]['Sns']['Subject']
+              print ('*****SNS_SUBJECT:*****')
+              print (sns_subject)
+              print ('')
+              
+              sns_message = event['Records'][0]['Sns']['Message']
+              print ('*****SNS_MESSAGE:*****')
+              print (sns_message)
+              print ('')
+              
+              def send_rds_message():
+                  print ('*****SENDING RDS MESSAGE*****')
+                  # Convert sns_message to a string. In RDS Events, sns_message is a dict.
+                  sns_message_string = json.dumps(sns_message, indent=4)
+                  slack_message = {"text": "*RDS Event:* " + sns_message_string}
+                  send_to_slack(slack_message)
+                  return
+                  
+              def send_eb_message():
+                  print ('*****SENDING EB MESSAGE*****')
+                  # sns_message is a string in EB Events.
+                  # The eb_message is the string between \nMessage:    and \n\nEnvironment
+                  eb_message = re.search('\nMessage: (.*)\n\nEnvironment', sns_message).group(1)
+                  eb_environment = re.search('\n\nEnvironment: (.*)\nApplication', sns_message).group(1)
+                  slack_message = {"text": "*EB Event:* " + eb_environment + ": " + eb_message}
+                  send_to_slack(slack_message)
+                  return
+                  
+              def send_other_message():
+                  print ('*****SENDING OTHER MESSAGE*****')
+                  slack_message = {"text": "*Other Event:* " + sns_message}
+                  send_to_slack(slack_message)
+                  return
+                  
+              def send_to_slack(slack_message):
+                  webhook_url = 'https://hooks.slack.com/services/xyz/xyz/123456'
+                  print (slack_message)
+                  requests.post(webhook_url, data=json.dumps(slack_message), headers={'Content-Type': 'application/json'})
+                  
+              if "RDS Notification Message" in sns_subject:
+                  send_rds_message()
+              elif "AWS Elastic Beanstalk Notification" in sns_subject:
+                  send_eb_message()    
+              else:
+                  send_other_message()
+                  
               return
+
       Handler: index.lambda_handler
       MemorySize: 128
       Role: !GetAtt 'executionRole.Arn'
